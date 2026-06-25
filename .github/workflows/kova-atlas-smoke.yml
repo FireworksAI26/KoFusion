@@ -1,0 +1,79 @@
+name: Kova Atlas Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Prompt to send to Kova Atlas primary worker"
+        required: false
+        default: "Reply with the single word pong."
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_GATEWAY_ID: ${{ secrets.CF_GATEWAY_ID || 'default' }}
+      CF_AIG_TOKEN: ${{ secrets.CF_AIG_TOKEN }}
+      KOVAFUSION_HARD_DOLLAR_CAP_USD: "0.50"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show checked out commit
+        run: |
+          git rev-parse HEAD
+          git status --short
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Validate secrets are present
+        run: |
+          test -n "$CF_ACCOUNT_ID"
+          test -n "$CF_AIG_TOKEN"
+      - name: Guard against stale Kimi K2.6 code
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          stale = "kimi-" + "k2.6"
+          roots = [Path("kovafusion"), Path("scripts"), Path("tests"), Path(".github/workflows/cloudflare-smoke.yml")]
+          hits = []
+          for root in roots:
+              paths = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
+              for path in paths:
+                  for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
+                      if stale in line:
+                          hits.append(f"{path}:{lineno}: {line.strip()}")
+          if hits:
+              print("Found stale Kimi K2.6 references in checked-out code:")
+              print("\n".join(hits))
+              raise SystemExit("Latest Kova Atlas code is not checked out or a merge conflict kept stale model text.")
+          print("no stale Kimi K2.6 references found in runtime code")
+          PY
+      - name: Show Kova Atlas model configuration
+        run: |
+          python - <<'PY'
+          from kovafusion.pool import WORKER_MODELS
+          print(f"primary_worker={WORKER_MODELS[0]}")
+          if WORKER_MODELS[0] != "workers-ai/@cf/moonshotai/kimi-k2.7-code":
+              raise SystemExit(f"Unexpected primary worker: {WORKER_MODELS[0]}")
+          PY
+      - name: Run Kova Atlas smoke call through Cloudflare AI Gateway
+        run: |
+          python - <<'PY'
+          import asyncio
+          from kovafusion.config import get_settings
+          from kovafusion.pool import ModelPool, WORKER_MODELS
+
+          async def main():
+              prompt = "${{ inputs.prompt }}"
+              model = WORKER_MODELS[0]
+              answer = await ModelPool(get_settings()).complete(model, prompt, purpose="kova_atlas_smoke")
+              print(f"model={model}")
+              print(answer[:500])
+              if not answer.strip():
+                  raise SystemExit("empty model response")
+
+          asyncio.run(main())
+          PY
