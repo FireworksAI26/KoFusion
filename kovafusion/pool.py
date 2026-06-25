@@ -6,7 +6,7 @@ import httpx
 
 from .config import Settings
 
-WORKER_MODELS = ["workers-ai/@cf/moonshotai/kimi-k2.6", "workers-ai/@cf/zai-org/glm-5.2"]
+WORKER_MODELS = ["workers-ai/@cf/moonshotai/kimi-k2.7-code", "workers-ai/@cf/zai-org/glm-5.2"]
 GPT55 = "openai/gpt-5.5"
 GPT55_PRO = "openai/gpt-5.5-pro"
 CLAUDE_OPUS = "anthropic/claude-opus-4.8"
