@@ -1,0 +1,41 @@
+name: Cloudflare KovaFusion benchmarks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_GATEWAY_ID: ${{ secrets.CF_GATEWAY_ID || 'default' }}
+      CF_AIG_TOKEN: ${{ secrets.CF_AIG_TOKEN }}
+      KOVAFUSION_TRACE_DIR: ./traces
+      KOVAFUSION_MAX_MODELS_PER_REQUEST: "8"
+      KOVAFUSION_MAX_REPAIRS_PER_CANDIDATE: "2"
+      KOVAFUSION_MAX_STEPS: "12"
+      KOVAFUSION_ENABLE_GPT55_PRO: "false"
+      KOVAFUSION_HARD_DOLLAR_CAP_USD: "2.00"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Validate Cloudflare secrets
+        run: |
+          test -n "$CF_ACCOUNT_ID"
+          test -n "$CF_AIG_TOKEN"
+      - name: Run unit tests without Cloudflare calls
+        run: pytest -q
+      - name: Run live Cloudflare KovaFusion benchmarks
+        run: python scripts/run_cloudflare_benchmarks.py
+      - name: Upload benchmark report and traces
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-kovafusion-benchmark-results
+          path: |
+            evals/cloudflare_benchmark_report.md
+            traces/*.json
