@@ -39,7 +39,7 @@ class Orchestrator:
 
     async def run(self, req: KovaRequest) -> KovaResponse:
         trace_id = uuid.uuid4().hex
-        trace: dict[str, Any] = {"trace_id": trace_id, "prompt": req.prompt, "mode": req.mode, "profile": req.profile, "tests": req.tests.model_dump() if req.tests else None, "models_called": [], "model_calls": [], "candidates": [], "repair_prompts": [], "cost_governor": []}
+        trace: dict[str, Any] = {"trace_id": trace_id, "prompt": req.prompt, "mode": req.mode, "tests": req.tests.model_dump() if req.tests else None, "models_called": [], "model_calls": [], "candidates": [], "repair_prompts": [], "cost_governor": []}
         governor = CostGovernor(self.settings)
         try:
             if req.mode == "verifiable" or (req.mode == "auto" and req.tests is not None):
@@ -52,19 +52,13 @@ class Orchestrator:
             await write_trace(self.settings.trace_dir, trace_id, trace)
 
     async def _nonverifiable(self, req: KovaRequest, trace: dict[str, Any], governor: CostGovernor) -> KovaResponse:
-        worker_models = DEFAULT_FANOUT if req.profile == "ultra" else WORKER_MODELS
-        policy = "ultra_full_pool_then_gpt55_judge_synth" if req.profile == "ultra" else "cheap_workers_then_gpt55_judge_synth"
-        trace.setdefault("conductor_steps", []).append({"action": "spawn_candidate", "model": "full_pool" if req.profile == "ultra" else "cheap_worker_pool", "reason": "ultra non-verifiable fusion uses the full pool" if req.profile == "ultra" else "adaptive non-verifiable fusion starts with cheap workers"})
-        outputs = await asyncio.gather(*[self._call(m, req.prompt, "fanout", trace, governor) for m in worker_models])
-        joined = json.dumps(dict(zip(worker_models, outputs)), indent=2)
-        trace.setdefault("conductor_steps", []).append({"action": "judge", "model": GPT55, "reason": "judge cheap-worker consensus before synthesis"})
+        outputs = await asyncio.gather(*[self._call(m, req.prompt, "fanout", trace, governor) for m in DEFAULT_FANOUT])
+        joined = json.dumps(dict(zip(DEFAULT_FANOUT, outputs)), indent=2)
         judge_prompt = f"Produce structured analysis with consensus, contradictions, gaps, insights for these answers:\n{joined}"
         analysis = await self._call(GPT55, judge_prompt, "judge", trace, governor)
-        trace.setdefault("conductor_steps", []).append({"action": "synthesize", "model": GPT55, "reason": "write one model-like final answer"})
         synth_prompt = f"Write the final answer to the user prompt using this analysis.\nPrompt:{req.prompt}\nAnalysis:{analysis}"
         answer = await self._call(GPT55, synth_prompt, "synth", trace, governor)
-        trace.setdefault("conductor_steps", []).append({"action": "stop", "reason": "non-verifiable synthesis complete"})
-        trace["nonverifiable"] = {"fanout_outputs": joined, "analysis": analysis, "adaptive_policy": policy}
+        trace["nonverifiable"] = {"fanout_outputs": joined, "analysis": analysis}
         return KovaResponse(answer=answer, verified=False, verifier=None, trace_id=trace["trace_id"], models_called=trace["models_called"], repairs_used=0)
 
     async def _generate_candidate(self, model: str, prompt: str, trace: dict[str, Any], governor: CostGovernor) -> dict:

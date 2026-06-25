@@ -6,7 +6,7 @@ import httpx
 
 from .config import Settings
 
-WORKER_MODELS = ["workers-ai/@cf/moonshotai/kimi-k2.7-code", "workers-ai/@cf/zai-org/glm-5.2"]
+WORKER_MODELS = ["workers-ai/@cf/moonshotai/kimi-k2.6", "workers-ai/@cf/zai-org/glm-5.2"]
 GPT55 = "openai/gpt-5.5"
 GPT55_PRO = "openai/gpt-5.5-pro"
 CLAUDE_OPUS = "anthropic/claude-opus-4.8"
@@ -45,32 +45,20 @@ class ModelPool:
     async def complete(self, model: str, prompt: str, *, purpose: str = "completion") -> str:
         if not (self.settings.cf_account_id and self.settings.cf_aig_token):
             raise RuntimeError("Cloudflare credentials are not configured; tests should monkeypatch ModelPool.complete")
-        url = f"https://gateway.ai.cloudflare.com/v1/{self.settings.cf_account_id}/{self.settings.cf_gateway_id}/compat/chat/completions"
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
-        }
+        url = f"https://gateway.ai.cloudflare.com/v1/{self.settings.cf_account_id}/{self.settings.cf_gateway_id}/{model}"
+        payload = {"messages": [{"role": "user", "content": prompt}], "temperature": 0.2}
         started = time.perf_counter()
         async with httpx.AsyncClient(timeout=120) as client:
-            resp = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {self.settings.cf_aig_token}", "Content-Type": "application/json"},
-                json=payload,
-            )
+            resp = await client.post(url, headers={"Authorization": f"Bearer {self.settings.cf_aig_token}"}, json=payload)
             resp.raise_for_status()
             data = resp.json()
         _ = started
         if isinstance(data, dict):
-            choices = data.get("choices")
-            if choices:
-                message = choices[0].get("message", {})
-                content = message.get("content", "")
-                if isinstance(content, list):
-                    return "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in content)
-                return content or ""
             if "result" in data and isinstance(data["result"], str):
                 return data["result"]
+            choices = data.get("choices")
+            if choices:
+                return choices[0].get("message", {}).get("content", "")
             if "response" in data:
                 return str(data["response"])
         return str(data)
