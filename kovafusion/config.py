@@ -20,7 +20,6 @@ class Settings:
     enable_gpt55_pro: bool
     hard_dollar_cap_usd: float
     max_steps: int = 8
-    cors_allow_origins: list[str] | None = None
 
 
 def _bool(name: str, default: bool = False) -> bool:
@@ -28,11 +27,6 @@ def _bool(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _csv(name: str, default: str) -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def get_settings() -> Settings:
@@ -46,5 +40,4 @@ def get_settings() -> Settings:
         enable_gpt55_pro=_bool("KOVAFUSION_ENABLE_GPT55_PRO", False),
         hard_dollar_cap_usd=float(os.getenv("KOVAFUSION_HARD_DOLLAR_CAP_USD", "2.00")),
         max_steps=int(os.getenv("KOVAFUSION_MAX_STEPS", "8")),
-        cors_allow_origins=_csv("KOVAFUSION_CORS_ALLOW_ORIGINS", "*"),
     )

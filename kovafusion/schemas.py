@@ -22,7 +22,6 @@ class KovaRequest(BaseModel):
     prompt: str
     tests: TestSpec | None = None
     mode: Literal["auto", "verifiable", "nonverifiable"] = "auto"
-    profile: Literal["standard", "ultra"] = "standard"
 
 
 class VerifierResult(BaseModel):
@@ -40,33 +39,3 @@ class KovaResponse(BaseModel):
     trace_id: str
     models_called: list[str]
     repairs_used: int
-
-
-class ChatMessage(BaseModel):
-    role: Literal["system", "user", "assistant"]
-    content: str
-
-
-class ChatCompletionRequest(BaseModel):
-    model: Literal["kova-atlas", "kova-atlas-ultra"] = "kova-atlas"
-    messages: list[ChatMessage]
-    temperature: float | None = None
-    stream: bool = False
-    tests: TestSpec | None = None
-    mode: Literal["auto", "verifiable", "nonverifiable"] = "auto"
-
-
-class ChatChoice(BaseModel):
-    index: int
-    message: ChatMessage
-    finish_reason: str = "stop"
-
-
-class ChatCompletionResponse(BaseModel):
-    id: str
-    object: Literal["chat.completion"] = "chat.completion"
-    created: int
-    model: str
-    choices: list[ChatChoice]
-    usage: dict[str, int | None]
-    kovafusion: KovaResponse

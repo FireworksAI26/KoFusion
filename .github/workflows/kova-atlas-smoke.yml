@@ -36,20 +36,17 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          stale = "kimi-" + "k2.6"
-          roots = [Path("kovafusion"), Path("scripts"), Path("tests"), Path(".github/workflows/cloudflare-smoke.yml")]
+          roots = [Path("kovafusion"), Path(".github"), Path("scripts"), Path("tests"), Path("README.md")]
           hits = []
           for root in roots:
               paths = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
               for path in paths:
-                  for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), start=1):
-                      if stale in line:
-                          hits.append(f"{path}:{lineno}: {line.strip()}")
+                  text = path.read_text(encoding="utf-8", errors="ignore")
+                  if "kimi-k2.6" in text:
+                      hits.append(str(path))
           if hits:
-              print("Found stale Kimi K2.6 references in checked-out code:")
-              print("\n".join(hits))
-              raise SystemExit("Latest Kova Atlas code is not checked out or a merge conflict kept stale model text.")
-          print("no stale Kimi K2.6 references found in runtime code")
+              raise SystemExit("Found stale kimi-k2.6 reference; latest Kova Atlas code is not checked out: " + ", ".join(hits))
+          print("no stale kimi-k2.6 references found")
           PY
       - name: Show Kova Atlas model configuration
         run: |

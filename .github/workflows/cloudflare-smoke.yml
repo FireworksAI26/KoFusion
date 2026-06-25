@@ -28,16 +28,7 @@ jobs:
         run: |
           test -n "$CF_ACCOUNT_ID"
           test -n "$CF_AIG_TOKEN"
-      - name: Show Kova Atlas model configuration
-        run: |
-          python - <<'PY'
-          from kovafusion.pool import WORKER_MODELS
-          print(f"primary_worker={WORKER_MODELS[0]}")
-          stale = "kimi-" + "k2.6"
-          if stale in WORKER_MODELS[0]:
-              raise SystemExit("Workflow is running stale Kimi K2.6 code; rerun on the latest branch/commit.")
-          PY
-      - name: Run Kova Atlas smoke call through Cloudflare AI Gateway
+      - name: Run Kimi K2.7 Code smoke call through Cloudflare AI Gateway
         run: |
           python - <<'PY'
           import asyncio
