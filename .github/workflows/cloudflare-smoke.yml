@@ -1,0 +1,56 @@
+name: Cloudflare smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Prompt to send to the cheap worker smoke test"
+        required: false
+        default: "Reply with the single word pong."
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_GATEWAY_ID: ${{ secrets.CF_GATEWAY_ID || 'default' }}
+      CF_AIG_TOKEN: ${{ secrets.CF_AIG_TOKEN }}
+      KOVAFUSION_HARD_DOLLAR_CAP_USD: "0.50"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Validate secrets are present
+        run: |
+          test -n "$CF_ACCOUNT_ID"
+          test -n "$CF_AIG_TOKEN"
+      - name: Show Kova Atlas model configuration
+        run: |
+          python - <<'PY'
+          from kovafusion.pool import WORKER_MODELS
+          print(f"primary_worker={WORKER_MODELS[0]}")
+          if "kimi-k2.6" in WORKER_MODELS[0]:
+              raise SystemExit("Workflow is running stale code with kimi-k2.6; rerun on the latest branch/commit.")
+          PY
+      - name: Run Kova Atlas smoke call through Cloudflare AI Gateway
+        run: |
+          python - <<'PY'
+          import asyncio
+          from kovafusion.config import get_settings
+          from kovafusion.pool import ModelPool, WORKER_MODELS
+
+          async def main():
+              prompt = "${{ inputs.prompt }}"
+              model = WORKER_MODELS[0]
+              answer = await ModelPool(get_settings()).complete(model, prompt, purpose="github_smoke")
+              print(f"model={model}")
+              print(answer[:500])
+              if not answer.strip():
+                  raise SystemExit("empty model response")
+
+          asyncio.run(main())
+          PY
